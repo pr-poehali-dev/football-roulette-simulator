@@ -738,88 +738,686 @@ function TeamView({ players, setPlayers, onNavigate }: {
   );
 }
 
-// ─── TOURNAMENTS VIEW ─────────────────────────────────────────────────────────
-function TournamentsView({ onNavigate }: { onNavigate: (tab: string) => void }) {
-  const [registered, setRegistered] = useState<string[]>([]);
-  const [msg, setMsg] = useState<string | null>(null);
+// ─── TOURNAMENT DATA ──────────────────────────────────────────────────────────
+type TournamentTeam = { name: string; w: number; d: number; l: number; gf: number; ga: number; isMe?: boolean };
+type PlayoffMatch = { home: string; away: string; homeScore: number | null; awayScore: number | null; played: boolean };
 
-  const register = (name: string) => {
-    setRegistered(prev => [...prev, name]);
-    setMsg(`Вы зарегистрированы в турнире «${name}»!`);
-    setTimeout(() => setMsg(null), 2500);
+
+const UCL_GROUPS: Record<string, TournamentTeam[]> = {
+  "A": [
+    { name: "FC TITAN", w: 3, d: 1, l: 0, gf: 9, ga: 3, isMe: true },
+    { name: "Real Cosmos", w: 2, d: 1, l: 1, gf: 7, ga: 5 },
+    { name: "Sky Rockets", w: 1, d: 0, l: 3, gf: 4, ga: 8 },
+    { name: "Iron Bulls", w: 0, d: 2, l: 2, gf: 3, ga: 7 },
+  ],
+  "B": [
+    { name: "ProKing FC", w: 4, d: 0, l: 0, gf: 11, ga: 2 },
+    { name: "Blue Eagles", w: 2, d: 1, l: 1, gf: 6, ga: 5 },
+    { name: "Neon FC", w: 1, d: 1, l: 2, gf: 4, ga: 7 },
+    { name: "FC Tornado", w: 0, d: 0, l: 4, gf: 1, ga: 8 },
+  ],
+  "C": [
+    { name: "SkyBolts", w: 3, d: 0, l: 1, gf: 8, ga: 4 },
+    { name: "Omega FC", w: 2, d: 1, l: 1, gf: 6, ga: 5 },
+    { name: "Red Storm", w: 1, d: 1, l: 2, gf: 3, ga: 6 },
+    { name: "FC Metro", w: 0, d: 2, l: 2, gf: 2, ga: 4 },
+  ],
+  "D": [
+    { name: "Titan Hawks", w: 3, d: 1, l: 0, gf: 10, ga: 3 },
+    { name: "FC Prime", w: 2, d: 0, l: 2, gf: 5, ga: 6 },
+    { name: "Silver Wolves", w: 1, d: 1, l: 2, gf: 4, ga: 7 },
+    { name: "Dark Horse", w: 0, d: 2, l: 2, gf: 2, ga: 5 },
+  ],
+};
+
+const UCL_PLAYOFF: PlayoffMatch[] = [
+  { home: "FC TITAN", away: "SkyBolts", homeScore: null, awayScore: null, played: false },
+  { home: "ProKing FC", away: "Titan Hawks", homeScore: 2, awayScore: 1, played: true },
+  { home: "Real Cosmos", away: "FC Prime", homeScore: 1, awayScore: 0, played: true },
+  { home: "Blue Eagles", away: "Omega FC", homeScore: 3, awayScore: 2, played: true },
+];
+
+const NAT_LEAGUE_TEAMS: TournamentTeam[] = [
+  { name: "FC TITAN", w: 8, d: 3, l: 2, gf: 24, ga: 12, isMe: true },
+  { name: "ProKing FC", w: 9, d: 2, l: 2, gf: 28, ga: 11 },
+  { name: "SkyBolts", w: 7, d: 4, l: 2, gf: 20, ga: 13 },
+  { name: "Real Cosmos", w: 7, d: 3, l: 3, gf: 19, ga: 14 },
+  { name: "Blue Eagles", w: 6, d: 4, l: 3, gf: 17, ga: 13 },
+  { name: "Neon FC", w: 6, d: 3, l: 4, gf: 15, ga: 14 },
+  { name: "Iron Bulls", w: 5, d: 3, l: 5, gf: 14, ga: 17 },
+  { name: "Sky Rockets", w: 5, d: 2, l: 6, gf: 13, ga: 18 },
+  { name: "FC Tornado", w: 4, d: 3, l: 6, gf: 12, ga: 18 },
+  { name: "Omega FC", w: 3, d: 4, l: 6, gf: 11, ga: 19 },
+  { name: "Red Storm", w: 2, d: 3, l: 8, gf: 9, ga: 22 },
+  { name: "FC Metro", w: 1, d: 2, l: 10, gf: 6, ga: 27 },
+];
+
+function pts(t: TournamentTeam) { return t.w * 3 + t.d; }
+function gd(t: TournamentTeam) { return t.gf - t.ga; }
+
+function GroupTable({ teams, title }: { teams: TournamentTeam[]; title: string }) {
+  const sorted = [...teams].sort((a, b) => pts(b) - pts(a) || gd(b) - gd(a));
+  return (
+    <div className="card-dark rounded-xl overflow-hidden">
+      <div className="px-4 py-2 border-b border-green-900 font-oswald text-green-400 text-sm">Группа {title}</div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-green-700 border-b border-green-950">
+              <th className="text-left px-3 py-1.5 font-normal">#</th>
+              <th className="text-left px-2 py-1.5 font-normal">Команда</th>
+              <th className="px-2 py-1.5 font-normal">И</th>
+              <th className="px-2 py-1.5 font-normal">В</th>
+              <th className="px-2 py-1.5 font-normal">Н</th>
+              <th className="px-2 py-1.5 font-normal">П</th>
+              <th className="px-2 py-1.5 font-normal">ГР</th>
+              <th className="px-2 py-1.5 font-normal text-yellow-500">О</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((t, i) => (
+              <tr key={t.name} className={`border-b border-green-950/50 ${t.isMe ? "bg-green-950/50" : ""} ${i < 2 ? "border-l-2 border-l-green-600" : ""}`}>
+                <td className="px-3 py-2 text-green-600">{i + 1}</td>
+                <td className={`px-2 py-2 font-oswald font-bold ${t.isMe ? "neon-text" : "text-white"}`}>
+                  {t.name}{t.isMe ? " ★" : ""}
+                </td>
+                <td className="px-2 py-2 text-center text-green-400">{t.w + t.d + t.l}</td>
+                <td className="px-2 py-2 text-center text-green-300">{t.w}</td>
+                <td className="px-2 py-2 text-center text-green-600">{t.d}</td>
+                <td className="px-2 py-2 text-center text-red-500">{t.l}</td>
+                <td className="px-2 py-2 text-center text-green-500">{t.gf}:{t.ga}</td>
+                <td className={`px-2 py-2 text-center font-oswald font-bold ${t.isMe ? "neon-text" : "text-yellow-400"}`}>{pts(t)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-3 py-1.5 text-xs text-green-700">▌ Топ-2 выходят в плей-офф</div>
+    </div>
+  );
+}
+
+function LeagueTable({ teams }: { teams: TournamentTeam[] }) {
+  const sorted = [...teams].sort((a, b) => pts(b) - pts(a) || gd(b) - gd(a));
+  return (
+    <div className="card-dark rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-green-700 border-b border-green-950">
+              <th className="text-left px-3 py-2 font-normal">#</th>
+              <th className="text-left px-2 py-2 font-normal">Команда</th>
+              <th className="px-2 py-2 font-normal">И</th>
+              <th className="px-2 py-2 font-normal">В</th>
+              <th className="px-2 py-2 font-normal">Н</th>
+              <th className="px-2 py-2 font-normal">П</th>
+              <th className="px-2 py-2 font-normal">РМ</th>
+              <th className="px-2 py-2 font-normal text-yellow-500">О</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((t, i) => (
+              <tr key={t.name} className={`border-b border-green-950/50 transition-colors ${t.isMe ? "bg-green-950/60" : "hover:bg-green-950/30"}
+                ${i < 3 ? "border-l-2 border-l-green-500" : ""}
+                ${i >= sorted.length - 3 ? "border-l-2 border-l-red-800" : ""}`}>
+                <td className="px-3 py-2.5 text-green-600 font-oswald">{i + 1}</td>
+                <td className={`px-2 py-2.5 font-oswald font-bold ${t.isMe ? "neon-text" : "text-white"}`}>
+                  {t.name}{t.isMe ? " ★" : ""}
+                </td>
+                <td className="px-2 py-2.5 text-center text-green-400">{t.w + t.d + t.l}</td>
+                <td className="px-2 py-2.5 text-center text-green-300">{t.w}</td>
+                <td className="px-2 py-2.5 text-center text-green-600">{t.d}</td>
+                <td className="px-2 py-2.5 text-center text-red-500">{t.l}</td>
+                <td className="px-2 py-2.5 text-center text-green-500">{t.gf}:{t.ga}</td>
+                <td className={`px-2 py-2.5 text-center font-oswald font-bold text-base ${t.isMe ? "neon-text" : "text-yellow-400"}`}>{pts(t)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex gap-4 px-3 py-2 text-xs text-green-700 border-t border-green-950">
+        <span><span className="text-green-500">▌</span> Топ-3: Плей-офф</span>
+        <span><span className="text-red-700">▌</span> Низ-3: Вылет</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── TOURNAMENT MATCH SIMULATOR ───────────────────────────────────────────────
+function TournamentMatchSim({
+  myTeam, opponent, round, onFinish, onBack,
+}: {
+  myTeam: string; opponent: string; round: string;
+  onFinish: (myScore: number, oppScore: number) => void;
+  onBack: () => void;
+}) {
+  const [phase, setPhase] = useState<"ready" | "playing" | "done">("ready");
+  const [myScore, setMyScore] = useState(0);
+  const [oppScore, setOppScore] = useState(0);
+  const [minute, setMinute] = useState(0);
+  const [events, setEvents] = useState<MatchEvent[]>([]);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const eventsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (eventsRef.current) eventsRef.current.scrollTop = eventsRef.current.scrollHeight;
+  }, [events]);
+
+  const startMatch = () => {
+    setPhase("playing");
+    let m = 0, my = 0, opp = 0;
+    const localEvents: MatchEvent[] = [];
+    intervalRef.current = setInterval(() => {
+      m += 1;
+      const roll = Math.random();
+      let ev: MatchEvent | null = null;
+      if (roll < 0.11) { my++; ev = { minute: m, text: `⚽ ГОЛ! ${myTeam} забивает! ${my}:${opp}`, type: "goal" }; }
+      else if (roll < 0.21) { opp++; ev = { minute: m, text: `😤 ${opponent} отвечает! ${my}:${opp}`, type: "goal" }; }
+      else if (roll < 0.25) { ev = { minute: m, text: `🟨 Жёлтая карточка — ${opponent}`, type: "card" }; }
+      else if (roll < 0.28) { ev = { minute: m, text: `🩹 Замена на поле`, type: "injury" }; }
+      else if (roll < 0.34) { ev = { minute: m, text: `🔥 Опасная атака!`, type: "info" }; }
+      if (ev) localEvents.push(ev);
+      setMyScore(my); setOppScore(opp); setMinute(m);
+      if (ev) setEvents([...localEvents]);
+      if (m >= 90) {
+        clearInterval(intervalRef.current!);
+        setPhase("done");
+        onFinish(my, opp);
+      }
+    }, 120);
   };
+
+  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+
+  if (phase === "ready") return (
+    <div className="card-dark rounded-xl p-6 text-center space-y-4 animate-fade-in">
+      <div className="text-xs text-green-600 font-oswald uppercase tracking-widest">{round}</div>
+      <div className="flex items-center justify-center gap-4 font-oswald text-xl font-bold">
+        <span className="neon-text">{myTeam}</span>
+        <span className="text-green-700 text-2xl">vs</span>
+        <span className="text-white">{opponent}</span>
+      </div>
+      <button onClick={startMatch} className="btn-gold w-full py-3 rounded-xl font-oswald font-bold text-lg">⚽ Начать матч!</button>
+      <button onClick={onBack} className="text-sm text-green-600 hover:text-green-400">← Назад</button>
+    </div>
+  );
+
+  if (phase === "playing") {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <div className="card-dark rounded-xl p-5 relative overflow-hidden">
+          <div className="absolute inset-0 pitch-texture opacity-20" />
+          <div className="relative">
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-xs text-red-400 font-oswald">LIVE • {minute}'</span>
+              <span className="text-xs text-green-600">{round}</span>
+            </div>
+            <div className="flex items-center justify-around">
+              <div className="text-center"><div className="font-oswald text-sm text-white">{myTeam}</div></div>
+              <div className="font-oswald text-5xl font-bold">
+                <span className="neon-text">{myScore}</span>
+                <span className="text-green-800 mx-2">:</span>
+                <span className={oppScore > myScore ? "text-red-400" : "text-white"}>{oppScore}</span>
+              </div>
+              <div className="text-center"><div className="font-oswald text-sm text-white">{opponent}</div></div>
+            </div>
+            <div className="mt-3 stat-bar">
+              <div className="stat-bar-fill transition-all duration-150" style={{ width: `${(minute / 90) * 100}%` }} />
+            </div>
+          </div>
+        </div>
+        <div className="card-dark rounded-xl p-4">
+          <div ref={eventsRef} className="space-y-1 max-h-36 overflow-y-auto scrollbar-none">
+            {events.length === 0 && <div className="text-xs text-green-700 italic">Матч начался...</div>}
+            {events.map((e, i) => (
+              <div key={i} className={`text-xs py-1 px-2 rounded ${e.type === "goal" ? "bg-green-950/60 text-green-300" : e.type === "card" ? "bg-yellow-950/60 text-yellow-300" : "text-green-600"}`}>
+                <span className="font-oswald text-green-700 mr-2">{e.minute}'</span>{e.text}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const outcome = myScore > oppScore ? "win" : myScore < oppScore ? "loss" : "draw";
+  const reward = outcome === "win" ? 500 : outcome === "draw" ? 200 : 100;
+  return (
+    <div className="card-dark rounded-xl p-6 text-center space-y-4 animate-scale-in">
+      <div className="text-xs text-green-600 font-oswald uppercase tracking-widest">{round} — Итог</div>
+      <div className={`font-oswald text-3xl font-bold ${outcome === "win" ? "neon-text" : outcome === "loss" ? "text-red-400" : "text-yellow-400"}`}>
+        {outcome === "win" ? "ПОБЕДА! 🏆" : outcome === "loss" ? "ПОРАЖЕНИЕ 😤" : "НИЧЬЯ 🤝"}
+      </div>
+      <div className="font-oswald text-5xl font-bold">
+        <span className="neon-text">{myScore}</span>
+        <span className="text-green-800 mx-3">:</span>
+        <span className={myScore < oppScore ? "text-red-400" : "text-white"}>{oppScore}</span>
+      </div>
+      <div className="glass-dark rounded-xl py-2 px-4 inline-block">
+        <span className="text-xs text-green-600">Заработано: </span>
+        <span className="font-oswald text-yellow-400 font-bold">+💰 {reward}</span>
+      </div>
+      <button onClick={onBack} className="btn-neon w-full py-3 rounded-xl font-oswald font-bold">← К турниру</button>
+    </div>
+  );
+}
+
+// ─── UCL VIEW ────────────────────────────────────────────────────────────────
+function UCLView({ onBack, onAddCoins }: { onBack: () => void; onAddCoins: (n: number) => void }) {
+  const [tab, setTab] = useState<"overview" | "groups" | "playoff">("overview");
+  const [playoffMatches, setPlayoffMatches] = useState<PlayoffMatch[]>(UCL_PLAYOFF);
+  const [activeMatch, setActiveMatch] = useState<PlayoffMatch | null>(null);
+
+  const myQFMatch = playoffMatches[0];
+
+  const handleMatchFinish = (my: number, opp: number) => {
+    setPlayoffMatches(prev => prev.map((m, i) => i === 0 ? { ...m, homeScore: my, awayScore: opp, played: true } : m));
+    const reward = my > opp ? 2000 : my === opp ? 800 : 300;
+    onAddCoins(reward);
+    setActiveMatch(null);
+  };
+
+  if (activeMatch) {
+    return <TournamentMatchSim myTeam="FC TITAN" opponent={activeMatch.away} round="1/4 финала · Лига Чемпионов" onFinish={handleMatchFinish} onBack={() => setActiveMatch(null)} />;
+  }
 
   return (
     <div className="space-y-4 animate-fade-in">
-      {msg && (
-        <div className="glass-dark neon-border rounded-xl px-4 py-3 text-center animate-scale-in">
-          <span className="font-oswald text-green-300">✅ {msg}</span>
+      <div className="flex items-center gap-3 mb-1">
+        <button onClick={onBack} className="text-green-600 hover:text-green-300 transition-colors">
+          <Icon name="ChevronLeft" size={22} />
+        </button>
+        <div>
+          <div className="font-oswald text-2xl text-white flex items-center gap-2">🏆 Лига Чемпионов</div>
+          <div className="text-xs text-green-600">16 команд • Сезон 4 • Призовой фонд: 💰 50,000</div>
+        </div>
+      </div>
+
+      {/* Prize breakdown */}
+      <div className="card-dark rounded-xl p-4 space-y-3">
+        <div className="font-oswald text-white text-sm mb-2 flex items-center gap-2"><span className="neon-text">▍</span>Распределение призов</div>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { place: "🥇 Чемпион", prize: "25,000", color: "text-yellow-400" },
+            { place: "🥈 Финалист", prize: "12,000", color: "text-gray-300" },
+            { place: "🥉 Полуфинал", prize: "6,000", color: "text-amber-700" },
+            { place: "4 Четвертьфинал", prize: "2,000", color: "text-green-500" },
+          ].map(p => (
+            <div key={p.place} className="bg-green-950/40 rounded-lg px-3 py-2 flex justify-between items-center">
+              <span className="text-xs text-green-500">{p.place}</span>
+              <span className={`font-oswald font-bold text-sm ${p.color}`}>💰 {p.prize}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 p-1 glass-dark rounded-xl">
+        {[{ id: "overview", label: "Обзор" }, { id: "groups", label: "Группы" }, { id: "playoff", label: "Плей-офф" }].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id as "overview" | "groups" | "playoff")}
+            className={`flex-1 py-2 rounded-lg font-oswald text-sm font-bold transition-all ${tab === t.id ? "bg-green-400 text-black" : "text-green-400 hover:text-white"}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" && (
+        <div className="space-y-4">
+          <div className="card-dark rounded-xl p-4 space-y-2">
+            <div className="font-oswald text-white flex items-center gap-2"><span className="neon-text">▍</span>Моя позиция</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-oswald text-lg neon-text">FC TITAN</div>
+                <div className="text-xs text-green-500">Группа A • 1 место • 10 очков</div>
+              </div>
+              <div className="text-right">
+                <div className="font-oswald text-2xl text-yellow-400">1/4</div>
+                <div className="text-xs text-green-600">Стадия</div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-1">
+              {[{ l: "И", v: "5" }, { l: "В", v: "3" }, { l: "Н", v: "1" }, { l: "П", v: "0" }, { l: "ГР", v: "9:3" }].map(s => (
+                <div key={s.l} className="flex-1 bg-green-950/40 rounded p-1.5 text-center">
+                  <div className="text-xs text-green-700">{s.l}</div>
+                  <div className="font-oswald text-sm neon-text">{s.v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card-dark rounded-xl p-4 space-y-3">
+            <div className="font-oswald text-white flex items-center gap-2"><span className="neon-text">▍</span>Мой матч плей-офф</div>
+            {myQFMatch.played ? (
+              <div className="text-center space-y-2">
+                <div className="text-sm text-green-500">1/4 финала сыгран</div>
+                <div className="font-oswald text-3xl">
+                  <span className={(myQFMatch.homeScore ?? 0) > (myQFMatch.awayScore ?? 0) ? "neon-text" : "text-white"}>{myQFMatch.homeScore}</span>
+                  <span className="text-green-800 mx-2">:</span>
+                  <span className={(myQFMatch.awayScore ?? 0) > (myQFMatch.homeScore ?? 0) ? "text-red-400" : "text-white"}>{myQFMatch.awayScore}</span>
+                </div>
+                <div className={`font-oswald font-bold ${(myQFMatch.homeScore ?? 0) > (myQFMatch.awayScore ?? 0) ? "neon-text" : "text-red-400"}`}>
+                  {(myQFMatch.homeScore ?? 0) > (myQFMatch.awayScore ?? 0) ? "🏆 Вышли в полуфинал!" : "Вылет из турнира"}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-center gap-4 font-oswald text-lg">
+                  <span className="neon-text">FC TITAN</span>
+                  <span className="text-green-700">vs</span>
+                  <span className="text-white">{myQFMatch.away}</span>
+                </div>
+                <button onClick={() => setActiveMatch(myQFMatch)} className="btn-gold w-full py-3 rounded-xl font-oswald font-bold">
+                  ⚽ Сыграть 1/4 финала!
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      <div className="font-oswald text-lg text-white flex items-center gap-2">
-        <span className="neon-text">▍</span> Активные турниры
-      </div>
-
-      {TOURNAMENTS.map((t, i) => {
-        const isRegistered = registered.includes(t.name);
-        return (
-          <div key={i} className="card-dark rounded-xl p-5 space-y-3">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-3xl mb-1">{t.icon}</div>
-                <div className="font-oswald text-xl text-white">{t.name}</div>
-                <div className="text-sm text-green-500">{t.teams} команд</div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-green-600 mb-1">Призовой фонд</div>
-                <div className="font-oswald text-xl text-yellow-400">💰 {t.prize}</div>
-                {t.myPos && <div className="text-xs text-green-400 mt-1">Моя позиция: #{t.myPos}</div>}
-              </div>
-            </div>
-            <div className={`inline-block px-3 py-1 rounded-full text-xs font-oswald font-bold ${
-              t.status === "active" ? "bg-green-900/60 text-green-300 border border-green-700" :
-              isRegistered ? "bg-green-900/60 text-green-300 border border-green-700" :
-              t.status === "registration" ? "bg-blue-900/60 text-blue-300 border border-blue-700" :
-              "bg-gray-800 text-gray-400 border border-gray-700"
-            }`}>
-              {t.status === "active" ? "🟢 Активен" : isRegistered ? "✅ Зарегистрирован" : t.status === "registration" ? "📝 Регистрация" : "⏳ Скоро"}
-            </div>
-            <button
-              onClick={() => {
-                if (t.status === "active") onNavigate("matches");
-                else if (t.status === "registration" && !isRegistered) register(t.name);
-              }}
-              disabled={t.status === "upcoming" || isRegistered}
-              className={`w-full py-2.5 rounded-xl font-oswald font-bold text-sm ${
-                t.status === "active" ? "btn-neon" :
-                isRegistered ? "opacity-50 cursor-not-allowed border border-green-800 text-green-600" :
-                t.status === "registration" ? "btn-gold" :
-                "opacity-40 cursor-not-allowed border border-gray-700 text-gray-500"
-              }`}>
-              {t.status === "active" ? "▶ Перейти к матчам" : isRegistered ? "✓ Зарегистрирован" : t.status === "registration" ? "Зарегистрироваться" : "Ожидание"}
-            </button>
-          </div>
-        );
-      })}
-
-      <div>
-        <div className="font-oswald text-lg text-white mb-3 flex items-center gap-2">
-          <span className="neon-text">▍</span> Таблица лидеров
+      {tab === "groups" && (
+        <div className="space-y-3">
+          {Object.entries(UCL_GROUPS).map(([g, teams]) => <GroupTable key={g} teams={teams} title={g} />)}
         </div>
-        <div className="card-dark rounded-xl overflow-hidden">
-          {[
-            { name: "ProKing_FC", pts: 24, emoji: "🥇", isMe: false },
-            { name: "SkyBolts", pts: 21, emoji: "🥈", isMe: false },
-            { name: "FC TITAN", pts: 19, emoji: "🥉", isMe: true },
-            { name: "Real Cosmos", pts: 17, emoji: "4️⃣", isMe: false },
-          ].map((row, i) => (
-            <div key={i} className={`flex items-center px-4 py-3 ${row.isMe ? "bg-green-950/50 border-l-2 border-green-400" : ""} ${i < 3 ? "border-b border-green-950" : ""}`}>
-              <div className="text-xl w-8">{row.emoji}</div>
-              <div className={`font-oswald flex-1 ml-3 ${row.isMe ? "neon-text" : "text-white"}`}>{row.name}</div>
-              <div className={`font-oswald font-bold ${row.isMe ? "neon-text" : "text-green-400"}`}>{row.pts} оч</div>
+      )}
+
+      {tab === "playoff" && (
+        <div className="space-y-3">
+          <div className="font-oswald text-white flex items-center gap-2"><span className="neon-text">▍</span>1/4 финала</div>
+          {playoffMatches.map((m, i) => (
+            <div key={i} className={`card-dark rounded-xl p-4 ${m.home === "FC TITAN" ? "neon-border" : ""}`}>
+              <div className="flex items-center justify-between">
+                <div className="font-oswald text-sm">
+                  <span className={m.home === "FC TITAN" ? "neon-text font-bold" : "text-white"}>{m.home}</span>
+                  <span className="text-green-700 mx-2">vs</span>
+                  <span className={m.away === "FC TITAN" ? "neon-text font-bold" : "text-white"}>{m.away}</span>
+                </div>
+                {m.played ? (
+                  <div className="font-oswald text-xl font-bold">
+                    <span className={m.homeScore! > m.awayScore! ? "neon-text" : "text-white"}>{m.homeScore}</span>
+                    <span className="text-green-800 mx-1">:</span>
+                    <span className={m.awayScore! > m.homeScore! ? "neon-text" : "text-white"}>{m.awayScore}</span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-green-600 font-oswald">Не сыгран</span>
+                )}
+              </div>
+              {!m.played && m.home === "FC TITAN" && (
+                <button onClick={() => setActiveMatch(m)} className="btn-neon w-full py-2 rounded-lg text-sm font-oswald mt-3">▶ Играть</button>
+              )}
             </div>
           ))}
+          <div className="font-oswald text-white flex items-center gap-2 mt-2"><span className="neon-text">▍</span>Полуфиналы</div>
+          {[
+            { home: "ProKing FC", away: "Real Cosmos", score: "—" },
+            { home: "Blue Eagles", away: "Победитель A/SkyBolts", score: "—" },
+          ].map((m, i) => (
+            <div key={i} className="card-dark rounded-xl p-4 opacity-60">
+              <div className="font-oswald text-sm text-white">{m.home} <span className="text-green-700 mx-2">vs</span> {m.away}</div>
+              <div className="text-xs text-green-700 mt-1">Ожидание результатов 1/4</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── NAT LEAGUE VIEW ─────────────────────────────────────────────────────────
+function NatLeagueView({ onBack, onAddCoins }: { onBack: () => void; onAddCoins: (n: number) => void }) {
+  const [tab, setTab] = useState<"table" | "schedule" | "prizes">("table");
+  const [leagueTeams, setLeagueTeams] = useState<TournamentTeam[]>(NAT_LEAGUE_TEAMS);
+  const [activeOpp, setActiveOpp] = useState<string | null>(null);
+
+  const myTeam = leagueTeams.find(t => t.isMe)!;
+  const sorted = [...leagueTeams].sort((a, b) => pts(b) - pts(a) || gd(b) - gd(a));
+  const myPos = sorted.findIndex(t => t.isMe) + 1;
+
+  const schedule = [
+    { opponent: "ProKing FC", played: true, result: "1:2", outcome: "loss" },
+    { opponent: "SkyBolts", played: true, result: "2:1", outcome: "win" },
+    { opponent: "Real Cosmos", played: true, result: "0:0", outcome: "draw" },
+    { opponent: "Blue Eagles", played: true, result: "3:1", outcome: "win" },
+    { opponent: "Neon FC", played: false, result: null, outcome: null },
+    { opponent: "Iron Bulls", played: false, result: null, outcome: null },
+    { opponent: "Sky Rockets", played: false, result: null, outcome: null },
+  ];
+
+  const nextMatch = schedule.find(s => !s.played);
+
+  const handleMatchFinish = (my: number, opp: number) => {
+    const outcome = my > opp ? "win" : my < opp ? "loss" : "draw";
+    setLeagueTeams(prev => prev.map(t => {
+      if (!t.isMe) return t;
+      return {
+        ...t,
+        w: t.w + (outcome === "win" ? 1 : 0),
+        d: t.d + (outcome === "draw" ? 1 : 0),
+        l: t.l + (outcome === "loss" ? 1 : 0),
+        gf: t.gf + my,
+        ga: t.ga + opp,
+      };
+    }));
+    onAddCoins(outcome === "win" ? 800 : outcome === "draw" ? 300 : 100);
+    setActiveOpp(null);
+  };
+
+  if (activeOpp) {
+    return <TournamentMatchSim myTeam="FC TITAN" opponent={activeOpp} round="Тур 5 · Национальная Лига" onFinish={handleMatchFinish} onBack={() => setActiveOpp(null)} />;
+  }
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex items-center gap-3 mb-1">
+        <button onClick={onBack} className="text-green-600 hover:text-green-300 transition-colors">
+          <Icon name="ChevronLeft" size={22} />
+        </button>
+        <div>
+          <div className="font-oswald text-2xl text-white flex items-center gap-2">🥇 Национальная Лига</div>
+          <div className="text-xs text-green-600">12 команд • Сезон 4 • Тур 4 из 11</div>
+        </div>
+      </div>
+
+      {/* My status */}
+      <div className="card-dark rounded-xl p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <div className="font-oswald text-lg neon-text">FC TITAN</div>
+            <div className="text-xs text-green-500">Место #{myPos} • {pts(myTeam)} очков</div>
+          </div>
+          <div className={`font-oswald text-3xl font-bold ${myPos <= 3 ? "neon-text" : myPos >= leagueTeams.length - 2 ? "text-red-400" : "text-yellow-400"}`}>
+            #{myPos}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {[{ l: "И", v: myTeam.w + myTeam.d + myTeam.l }, { l: "В", v: myTeam.w }, { l: "Н", v: myTeam.d }, { l: "П", v: myTeam.l }, { l: "ГР", v: `${myTeam.gf}:${myTeam.ga}` }, { l: "О", v: pts(myTeam) }].map(s => (
+            <div key={s.l} className="flex-1 bg-green-950/40 rounded p-1.5 text-center">
+              <div className="text-xs text-green-700">{s.l}</div>
+              <div className="font-oswald text-sm neon-text">{s.v}</div>
+            </div>
+          ))}
+        </div>
+        {nextMatch && (
+          <button onClick={() => setActiveOpp(nextMatch.opponent)} className="btn-gold w-full py-2.5 rounded-xl font-oswald font-bold mt-3">
+            ⚽ Тур 5: vs {nextMatch.opponent}
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 p-1 glass-dark rounded-xl">
+        {[{ id: "table", label: "Таблица" }, { id: "schedule", label: "Расписание" }, { id: "prizes", label: "Призы" }].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id as "table" | "schedule" | "prizes")}
+            className={`flex-1 py-2 rounded-lg font-oswald text-sm font-bold transition-all ${tab === t.id ? "bg-green-400 text-black" : "text-green-400 hover:text-white"}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "table" && <LeagueTable teams={leagueTeams} />}
+
+      {tab === "schedule" && (
+        <div className="space-y-2">
+          {schedule.map((s, i) => (
+            <div key={i} className={`card-dark rounded-xl p-4 flex items-center justify-between ${!s.played ? "border border-green-900" : ""}`}>
+              <div>
+                <div className="font-oswald text-white">vs {s.opponent}</div>
+                <div className="text-xs text-green-600">Тур {i + 1} · Национальная Лига</div>
+              </div>
+              {s.played ? (
+                <div className="text-right">
+                  <div className="font-oswald text-xl font-bold text-white">{s.result}</div>
+                  <div className={`text-xs font-oswald ${s.outcome === "win" ? "neon-text" : s.outcome === "loss" ? "text-red-400" : "text-yellow-400"}`}>
+                    {s.outcome === "win" ? "ПОБЕДА" : s.outcome === "loss" ? "ПОРАЖЕНИЕ" : "НИЧЬЯ"}
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setActiveOpp(s.opponent)} className="btn-neon px-4 py-2 rounded-lg text-sm font-oswald font-bold">
+                  ▶ Играть
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "prizes" && (
+        <div className="space-y-3">
+          <div className="card-dark rounded-xl p-4 space-y-3">
+            <div className="font-oswald text-white flex items-center gap-2"><span className="neon-text">▍</span>Призовые места</div>
+            {[
+              { place: "🥇 1 место — Чемпион", prize: "10,000", extra: "+ Золотой трофей", color: "text-yellow-400" },
+              { place: "🥈 2 место", prize: "5,000", extra: "+ Серебряная медаль", color: "text-gray-300" },
+              { place: "🥉 3 место", prize: "2,500", extra: "+ Бронзовая медаль", color: "text-amber-700" },
+              { place: "4–6 место", prize: "1,000", extra: "За каждое место", color: "text-green-400" },
+              { place: "За победу в туре", prize: "800", extra: "Каждый матч", color: "text-green-500" },
+              { place: "За ничью в туре", prize: "300", extra: "Каждый матч", color: "text-green-600" },
+            ].map(p => (
+              <div key={p.place} className="flex items-center justify-between border-b border-green-950 pb-2 last:border-0 last:pb-0">
+                <div>
+                  <div className="text-sm text-white">{p.place}</div>
+                  <div className="text-xs text-green-700">{p.extra}</div>
+                </div>
+                <div className={`font-oswald font-bold ${p.color}`}>💰 {p.prize}</div>
+              </div>
+            ))}
+          </div>
+          <div className="card-dark rounded-xl p-4">
+            <div className="font-oswald text-white mb-2">🎯 Вылет/Повышение</div>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-green-600" /><span className="text-green-300">Топ-3 → Плей-офф за повышение в Лигу Чемпионов</span></div>
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-red-800" /><span className="text-red-400">Низ-3 → Вылет в Дивизион II</span></div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── TOURNAMENTS VIEW ─────────────────────────────────────────────────────────
+function TournamentsView({ onNavigate, onAddCoins }: { onNavigate: (tab: string) => void; onAddCoins: (n: number) => void }) {
+  const [openTournament, setOpenTournament] = useState<"ucl" | "nat" | null>(null);
+
+  if (openTournament === "ucl") return <UCLView onBack={() => setOpenTournament(null)} onAddCoins={onAddCoins} />;
+  if (openTournament === "nat") return <NatLeagueView onBack={() => setOpenTournament(null)} onAddCoins={onAddCoins} />;
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div className="font-oswald text-lg text-white flex items-center gap-2">
+        <span className="neon-text">▍</span> Мои турниры
+      </div>
+
+      {/* UCL */}
+      <div className="card-dark rounded-xl overflow-hidden neon-border">
+        <div className="relative h-24 overflow-hidden">
+          <img src={FIELD_IMG} alt="" className="w-full h-full object-cover opacity-40" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-transparent flex items-center px-5 gap-4">
+            <div className="text-5xl">🏆</div>
+            <div>
+              <div className="font-oswald text-2xl text-white font-bold">Лига Чемпионов</div>
+              <div className="text-sm text-green-400">16 команд • Сезон 4</div>
+            </div>
+            <div className="ml-auto text-right">
+              <div className="text-xs text-green-600">Призовой фонд</div>
+              <div className="font-oswald text-xl text-yellow-400 font-bold">💰 50,000</div>
+            </div>
+          </div>
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 bg-green-950/40 rounded-lg p-2 text-center">
+              <div className="text-xs text-green-600">Моя позиция</div>
+              <div className="font-oswald text-lg neon-text">Группа A • #1</div>
+            </div>
+            <div className="flex-1 bg-green-950/40 rounded-lg p-2 text-center">
+              <div className="text-xs text-green-600">Стадия</div>
+              <div className="font-oswald text-lg text-yellow-400">1/4 финала</div>
+            </div>
+            <div className="flex-1 bg-green-950/40 rounded-lg p-2 text-center">
+              <div className="text-xs text-green-600">Статус</div>
+              <div className="text-xs font-oswald text-green-300 bg-green-900/60 rounded-full px-2 py-0.5 mt-0.5">🟢 Активен</div>
+            </div>
+          </div>
+          <button onClick={() => setOpenTournament("ucl")} className="btn-neon w-full py-3 rounded-xl font-oswald font-bold text-base">
+            ▶ Перейти в Лигу Чемпионов
+          </button>
+        </div>
+      </div>
+
+      {/* National League */}
+      <div className="card-dark rounded-xl overflow-hidden" style={{ borderColor: "rgba(234,179,8,0.3)" }}>
+        <div className="relative h-24 overflow-hidden">
+          <img src={FIELD_IMG} alt="" className="w-full h-full object-cover opacity-30" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-transparent flex items-center px-5 gap-4">
+            <div className="text-5xl">🥇</div>
+            <div>
+              <div className="font-oswald text-2xl text-white font-bold">Национальная Лига</div>
+              <div className="text-sm text-yellow-500">12 команд • Тур 4/11</div>
+            </div>
+            <div className="ml-auto text-right">
+              <div className="text-xs text-green-600">Призовой фонд</div>
+              <div className="font-oswald text-xl text-yellow-400 font-bold">💰 20,000</div>
+            </div>
+          </div>
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 bg-green-950/40 rounded-lg p-2 text-center">
+              <div className="text-xs text-green-600">Место</div>
+              <div className="font-oswald text-lg neon-text">#2</div>
+            </div>
+            <div className="flex-1 bg-green-950/40 rounded-lg p-2 text-center">
+              <div className="text-xs text-green-600">Очки</div>
+              <div className="font-oswald text-lg text-yellow-400">27</div>
+            </div>
+            <div className="flex-1 bg-green-950/40 rounded-lg p-2 text-center">
+              <div className="text-xs text-green-600">Следующий</div>
+              <div className="font-oswald text-xs text-white">vs Neon FC</div>
+            </div>
+          </div>
+          <button onClick={() => setOpenTournament("nat")} className="btn-gold w-full py-3 rounded-xl font-oswald font-bold text-base">
+            ▶ Перейти в Нац. Лигу
+          </button>
+        </div>
+      </div>
+
+      {/* Star Cup — upcoming */}
+      <div className="card-dark rounded-xl p-5 opacity-60">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="text-3xl mb-1">⭐</div>
+            <div className="font-oswald text-xl text-white">Кубок Звёзд</div>
+            <div className="text-sm text-green-600">8 лучших команд сезона</div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-green-700 mb-1">Призовой фонд</div>
+            <div className="font-oswald text-xl text-yellow-600">💰 100,000</div>
+          </div>
+        </div>
+        <div className="mt-3 inline-block px-3 py-1 rounded-full text-xs font-oswald font-bold bg-gray-800 text-gray-400 border border-gray-700">
+          ⏳ Старт по окончании Нац. Лиги
         </div>
       </div>
     </div>
@@ -1028,7 +1626,7 @@ export default function Index() {
     dashboard: <DashboardView onNavigate={setActiveTab} history={history} />,
     matches: <MatchesView history={history} onAddResult={addResult} />,
     team: <TeamView players={players} setPlayers={setPlayers} onNavigate={setActiveTab} />,
-    tournaments: <TournamentsView onNavigate={setActiveTab} />,
+    tournaments: <TournamentsView onNavigate={setActiveTab} onAddCoins={(n) => setCoins(c => c + n)} />,
     shop: <ShopView coins={coins} setCoins={setCoins} />,
     profile: <ProfileView history={history} onNavigate={setActiveTab} />,
   };
