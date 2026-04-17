@@ -85,10 +85,12 @@ function MatchSimulator({
   mode,
   onBack,
   onFinish,
+  onPlayAgain,
 }: {
   mode: "pvp" | "ai";
   onBack: () => void;
   onFinish: (result: string, outcome: string) => void;
+  onPlayAgain: () => void;
 }) {
   const [phase, setPhase] = useState<MatchState>("searching");
   const [myScore, setMyScore] = useState(0);
@@ -143,17 +145,17 @@ function MatchSimulator({
       const roll = Math.random();
       let newEvent: MatchEvent | null = null;
 
-      if (roll < 0.12) {
+      if (roll < 0.024) {
         my += 1;
         newEvent = { minute: m, text: `⚽ ГОЛ! FC TITAN забивает! ${my}:${opp}`, type: "goal" };
-      } else if (roll < 0.22) {
+      } else if (roll < 0.044) {
         opp += 1;
         newEvent = { minute: m, text: `😤 ${opponent} сравнивает счёт! ${my}:${opp}`, type: "goal" };
-      } else if (roll < 0.27) {
+      } else if (roll < 0.12) {
         newEvent = { minute: m, text: `🟨 Жёлтая карточка — ${opponent}`, type: "card" };
-      } else if (roll < 0.30) {
+      } else if (roll < 0.14) {
         newEvent = { minute: m, text: `🩹 Замена! Игрок покидает поле`, type: "injury" };
-      } else if (roll < 0.35) {
+      } else if (roll < 0.22) {
         newEvent = { minute: m, text: `🔥 Опасный момент у ворот ${opponent}!`, type: "info" };
       }
 
@@ -358,7 +360,14 @@ function MatchSimulator({
           </div>
         ))}
       </div>
-      <button onClick={onBack} className="btn-neon w-full py-3 rounded-xl font-oswald font-bold text-lg">← Вернуться к матчам</button>
+      <div className="grid grid-cols-2 gap-3">
+        <button onClick={onPlayAgain} className="btn-gold py-3 rounded-xl font-oswald font-bold text-base">
+          🔄 Ещё матч
+        </button>
+        <button onClick={onBack} className="btn-neon py-3 rounded-xl font-oswald font-bold text-base">
+          ← К матчам
+        </button>
+      </div>
     </div>
   );
 }
@@ -585,7 +594,13 @@ function MatchesView({ history, onAddResult }: { history: typeof MATCHES_HISTORY
   };
 
   if (matchMode) {
-    return <MatchSimulator mode={matchMode} onBack={() => setMatchMode(null)} onFinish={(r, o) => { handleFinish(r, o); setMatchMode(null); setTab("history"); }} />;
+    const currentMode = matchMode;
+    return <MatchSimulator
+      mode={currentMode}
+      onBack={() => setMatchMode(null)}
+      onFinish={(r, o) => { handleFinish(r, o); }}
+      onPlayAgain={() => { setMatchMode(null); setTimeout(() => setMatchMode(currentMode), 50); }}
+    />;
   }
 
   return (
@@ -911,11 +926,11 @@ function TournamentMatchSim({
       m += 1;
       const roll = Math.random();
       let ev: MatchEvent | null = null;
-      if (roll < 0.11) { my++; ev = { minute: m, text: `⚽ ГОЛ! ${myTeam} забивает! ${my}:${opp}`, type: "goal" }; }
-      else if (roll < 0.21) { opp++; ev = { minute: m, text: `😤 ${opponent} отвечает! ${my}:${opp}`, type: "goal" }; }
-      else if (roll < 0.25) { ev = { minute: m, text: `🟨 Жёлтая карточка — ${opponent}`, type: "card" }; }
-      else if (roll < 0.28) { ev = { minute: m, text: `🩹 Замена на поле`, type: "injury" }; }
-      else if (roll < 0.34) { ev = { minute: m, text: `🔥 Опасная атака!`, type: "info" }; }
+      if (roll < 0.022) { my++; ev = { minute: m, text: `⚽ ГОЛ! ${myTeam} забивает! ${my}:${opp}`, type: "goal" }; }
+      else if (roll < 0.042) { opp++; ev = { minute: m, text: `😤 ${opponent} отвечает! ${my}:${opp}`, type: "goal" }; }
+      else if (roll < 0.12) { ev = { minute: m, text: `🟨 Жёлтая карточка — ${opponent}`, type: "card" }; }
+      else if (roll < 0.14) { ev = { minute: m, text: `🩹 Замена на поле`, type: "injury" }; }
+      else if (roll < 0.22) { ev = { minute: m, text: `🔥 Опасная атака!`, type: "info" }; }
       if (ev) localEvents.push(ev);
       setMyScore(my); setOppScore(opp); setMinute(m);
       if (ev) setEvents([...localEvents]);
